@@ -1,122 +1,104 @@
-import sqlite3
+from motor.motor_asyncio import AsyncIOMotorClient
 import time
+import config
 
-DB_NAME = "userbot.db"
+# MongoDB connection
+mongo = AsyncIOMotorClient(config.MONGO_URI)
 
-def get_db():
-return sqlite3.connect(DB_NAME)
+db = mongo["userbot_system"]
 
-def init_db():
-conn = get_db()
-cur = conn.cursor()
+users_db = db["users"]
+admins_db = db["admins"]
+autopromo_db = db["autopromo"]
 
-# users table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    username TEXT,
-    phone TEXT,
-    session TEXT,
-    approved INTEGER DEFAULT 0,
-    login_time INTEGER
-)
-""")
 
-# admins table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS admins (
-    user_id INTEGER PRIMARY KEY,
-    username TEXT
-)
-""")
+# ADD USER
+async def add_user(user_id, username, phone, session):
+    data = {
+        "user_id": user_id,
+        "username": username,
+        "phone": phone,
+        "session": session,
+        "approved": False,
+        "login_time": int(time.time())
+    }
 
-# autopromo table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS autopromo (
-    user_id INTEGER,
-    text TEXT,
-    time INTEGER
-)
-""")
+    await users_db.update_one(
+        {"user_id": user_id},
+        {"$set": data},
+        upsert=True
+    )
 
-conn.commit()
-conn.close()
 
-add user
+# APPROVE USER
+async def approve_user(user_id):
+    await users_db.update_one(
+        {"user_id": user_id},
+        {"$set": {"approved": True}}
+    )
 
-def add_user(user_id, username, phone, session):
-conn = get_db()
-cur = conn.cursor()
 
-cur.execute(
-    "INSERT OR REPLACE INTO users VALUES (?, ?, ?, ?, ?, ?)",
-    (user_id, username, phone, session, 0, int(time.time()))
-)
+# CHECK APPROVED
+async def is_approved(user_id):
+    user = await users_db.find_one({"user_id": user_id})
 
-conn.commit()
-conn.close()
+    if user and user.get("approved"):
+        return True
+    return False
 
-approve user
 
-def approve_user(user_id):
-conn = get_db()
-cur = conn.cursor()
+# ADD ADMIN
+async def add_admin(user_id, username):
+    data = {
+        "user_id": user_id,
+        "username": username
+    }
 
-cur.execute("UPDATE users SET approved=1 WHERE user_id=?", (user_id,))
+    await admins_db.update_one(
+        {"user_id": user_id},
+        {"$set": data},
+        upsert=True
+    )
 
-conn.commit()
-conn.close()
 
-check approval
+# CHECK ADMIN
+async def is_admin(user_id):
+    admin = await admins_db.find_one({"user_id": user_id})
 
-def is_approved(user_id):
-conn = get_db()
-cur = conn.cursor()
+    if admin:
+        return True
+    return False
 
-cur.execute("SELECT approved FROM users WHERE user_id=?", (user_id,))
-data = cur.fetchone()
 
-conn.close()
+# SAVE AUTOPROMO
+async def save_autopromo(user_id, text, time_delay):
+    data = {
+        "user_id": user_id,
+        "text": text,
+        "time": time_delay
+    }
 
-if data and data[0] == 1:
-    return True
-return False
+    await autopromo_db.update_one(
+        {"user_id": user_id},
+        {"$set": data},
+        upsert=True
+    )
 
-add admin
 
-def add_admin(user_id, username):
-conn = get_db()
-cur = conn.cursor()
+# GET AUTOPROMO
+async def get_autopromo(user_id):
+    data = await autopromo_db.find_one({"user_id": user_id})
+    return data
 
-cur.execute(
-    "INSERT OR REPLACE INTO admins VALUES (?, ?)",
-    (user_id, username)
-)
 
-conn.commit()
-conn.close()
+# REMOVE USER
+async def remove_user(user_id):
+    await users_db.delete_one({"user_id": user_id})
 
-check admin
 
-def is_admin(user_id):
-conn = get_db()
-cur = conn.cursor()
-
-cur.execute("SELECT * FROM admins WHERE user_id=?", (user_id,))
-data = cur.fetchone()
-
-conn.close()
-
-return bool(data)
-
-remove expired logins (3 days)
-
-def remove_expired(expiry_seconds):
-conn = get_db()
-cur = conn.cursor()
-
-now = int(time.time())
-cur.execute("DELETE FROM users WHERE ? - login_time > ?", (now, expiry_seconds))
-
-conn.commit()
-conn.close()
+# GET ALL USERS
+async def get_all_users():
+    users = []
+    async for user in users_db.find():
+        users.append(user)
+    return users
