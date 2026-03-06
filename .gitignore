@@ -1,0 +1,43 @@
+Python cache
+
+pycache/
+*.py[cod]
+*$py.class
+
+Virtual environments
+
+venv/
+env/
+.venv/
+
+Environment variables
+
+.env
+
+Userbot session files (IMPORTANT)
+
+sessions/
+*.session
+
+Logs
+
+*.log
+
+Heroku files
+
+.heroku/
+
+OS files
+
+.DS_Store
+Thumbs.db
+
+IDE / Editor folders
+
+.vscode/
+.idea/
+
+Temporary files
+
+*.tmp
+*.swp
